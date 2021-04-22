@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: partition-watchdog
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: partition-watchdog
+rules:
+  - apiGroups: ["","apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: partition-watchdog
+subjects:
+  - kind: ServiceAccount
+    name: partition-watchdog
+roleRef:
+  kind: Role
+  name: partition-watchdog
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: partition-watchdog
+  labels:
+    app: partition-watchdog
+spec:
+  selector:
+    matchLabels:
+      app: partition-watchdog
+  template:
+    metadata:
+      labels:
+        app: partition-watchdog
+    spec:
+      affinity: {}
+      serviceAccount: partition-watchdog
+      serviceAccountName: partition-watchdog
+      containers:
+      - name: partition-watchdog
+        image: mwennrich/partition-watchdog:latest
+        env:
+        - name: WATCHDOG_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        command:
+          - /partition-watchdog
+          - check
+          - --deployment=kube-controller-manager
+          - --target=212.34.83.1:22
+        resources:
+          limits:
+            cpu: 100m
+            memory: 50Mi
+          requests:
+            cpu: 100m
+            memory: 50Mi
+      tolerations:
+      - effect: NoSchedule
+        operator: Exists
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoExecute
+        operator: Exists
